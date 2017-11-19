@@ -1,3 +1,4 @@
+#Backend для приложения БулкаХлеба
 
 За основу был взят пример из https://github.com/waubau/koa_jwt_auth.
 
@@ -8,7 +9,7 @@
 
 Ниже текст из оригинального примера:
 
-# Авторизация по JWT для http и WebSockets в Node.js
+## Авторизация по JWT для http и WebSockets в Node.js
 
 
 ### Использование:
