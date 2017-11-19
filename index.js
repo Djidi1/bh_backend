@@ -3,6 +3,12 @@
 1. mongod --smallfiles (запуск БД)
 2. forever start index.js (список запущенных sudo forever list, остановить forever stop index.js )
 2a. node index.js
+
+GIT:
+1. Коммит: git commit -m 'text commit'
+2. В ГитХаб: git push -u origin master   
+3. Из ГитХаб: git pull origin master
+
 */
 
 const Koa = require('koa'); // ядро
