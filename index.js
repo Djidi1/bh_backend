@@ -5,7 +5,7 @@
 2a. node index.js
 
 GIT:
-1. Коммит: git commit -m 'text commit'
+1. Коммит: git commit -am 'text commit'
 2. В ГитХаб: git push -u origin master   
 3. Из ГитХаб: git pull origin master
 
