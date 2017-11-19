@@ -41,24 +41,21 @@ app.use(passport.initialize()); // сначала passport
 app.use(router.routes()); // потом маршруты
 
 
-const server = app.listen(process.env.PORT, process.env.IP);// запускаем сервер на порту 3000
+const server = app.listen(process.env.PORT || '8080', process.env.IP || 'localhost');// запускаем сервер на порту 3000
+// const server = app.listen('8001','127.0.0.1');// запускаем сервер на порту 3000
+
 
 // Add headers
 app.use(function (req, res, next) {
-
     // Website you wish to allow to connect
     res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8000');
-
     // Request methods you wish to allow
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
-
     // Request headers you wish to allow
     res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
-
     // Set to true if you need the website to include cookies in the requests sent
     // to the API (e.g. in case you use sessions)
     res.setHeader('Access-Control-Allow-Credentials', true);
-
     // Pass to next layer of middleware
     next();
 });
@@ -104,7 +101,7 @@ userSchema.virtual('password')
 userSchema.methods.checkPassword = function (password) {
   if (!password) return false;
   if (!this.passwordHash) return false;
-  return crypto.pbkdf2Sync(password, this.salt, 1, 128, 'sha1') == this.passwordHash;
+  return crypto.pbkdf2Sync(password, this.salt, 1, 128, 'sha1') === this.passwordHash;
 };
 
 const User = mongoose.model('User', userSchema);
@@ -154,56 +151,6 @@ passport.use(new JwtStrategy(jwtOptions, function (payload, done) {
   })
 );
 
-//------------Routing---------------//
-
-//маршрут для создания нового пользователя
-
-router.post('/user', async(ctx, next) => {
-  try {
-    ctx.body = await User.create(ctx.request.body);
-  }
-  catch (err) {
-    ctx.status = 400;
-    ctx.body = err;
-  }
-});
-
-//маршрут для локальной авторизации и создания JWT при успешной авторизации
-
-router.post('/login', async(ctx, next) => {
-  await passport.authenticate('local', function (err, user) {
-    if (user == false) {
-      ctx.body = "Login failed";
-    } else {
-      //--payload - информация которую мы храним в токене и можем из него получать
-      const payload = {
-        id: user.id,
-        displayName: user.displayName,
-        email: user.email
-      };
-      const token = jwt.sign(payload, jwtsecret); //здесь создается JWT
-      
-      ctx.body = {user: user.displayName, token: 'JWT ' + token};
-    }
-  })(ctx, next);
-  
-});
-
-// маршрут для авторизации по токену
-
-router.get('/custom', async(ctx, next) => {
-  
-  await passport.authenticate('jwt', function (err, user) {
-    if (user) {
-      ctx.body = "hello " + user.displayName;
-    } else {
-      ctx.body = "No such user";
-      console.log("err", err)
-    }
-  } )(ctx, next)
-  
-});
-
 //---Socket Communication-----//
 let io = socketIO(server);
 
@@ -217,14 +164,15 @@ io.on('connection', function (socket) {
       User.update({ email: useremail }, { lists: data }, function (err, raw) {
         if (err) console.log(err);
         console.log('The raw response from Mongo was ', raw);
-        socket.broadcast.emit('updated_list',  data);
+        console.log('Send to room: ', useremail);
+        socket.to(useremail).emit('updated_list',  data);
       });
     }
   });
   socket.on("login", function (data) {
     console.log('LOGIN');
     console.log(data);
-    var user = JSON.parse(data);
+    let user = JSON.parse(data);
     test_login(user.username, user.password, socket);
   });
   socket.on("register", function (data) {
@@ -257,6 +205,7 @@ io.on('connection', socketioJwt.authorize({
       console.log(err);
       return (err);
     }
+    socket.join(email);
     socket.emit('authenticate_result',  user);
   });
 });
@@ -269,7 +218,7 @@ function test_login(email, password, socket) {
       }
       console.log(user);
       if (!user || !user.checkPassword(password)) {
-        var error = 'К сожалению мы не нашли пользователя с такой почтой и паролем.<br/> Попробуйте еще раз или воспользуйтесь восстановлением пароля.';
+        let error = 'К сожалению мы не нашли пользователя с такой почтой и паролем.<br/> Попробуйте еще раз или воспользуйтесь восстановлением пароля.';
         socket.emit('login_result', error);
         console.log(error);
       }else{
@@ -281,7 +230,7 @@ function test_login(email, password, socket) {
         };
         const token = jwt.sign(payload, jwtsecret); //здесь создается JWT
         
-        var body = {user: user.displayName, token: token};
+        let body = {user: user.displayName, token: token};
         // отправляем ответ клиенту
         socket.emit('auth_accept', body);
         console.log(body);

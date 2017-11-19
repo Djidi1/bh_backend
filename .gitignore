@@ -8,3 +8,4 @@
 build/
 node_modules/
 Thumbs.db
+package-lock.json

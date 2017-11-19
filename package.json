@@ -12,6 +12,7 @@
     "koa-router": "^7.0.1",
     "koa-static": "^3.0.0",
     "mongo-express": "^0.44.0",
+    "mongodb": "^2.2.33",
     "mongoose": "^4.9.0",
     "passport-jwt": "^2.2.1",
     "passport-local": "^1.0.0",
