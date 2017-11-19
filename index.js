@@ -1,3 +1,10 @@
+/*
+Запуск:
+1. mongod --smallfiles (запуск БД)
+2. forever start index.js (список запущенных sudo forever list, остановить forever stop index.js )
+2a. node index.js
+*/
+
 const Koa = require('koa'); // ядро
 const Router = require('koa-router'); // маршрутизация
 const bodyParser = require('koa-bodyparser'); // парсер для POST запросов
@@ -26,7 +33,29 @@ app.use(bodyParser());
 
 app.use(passport.initialize()); // сначала passport
 app.use(router.routes()); // потом маршруты
-const server = app.listen(3000);// запускаем сервер на порту 3000
+
+
+const server = app.listen(process.env.PORT, process.env.IP);// запускаем сервер на порту 3000
+
+// Add headers
+app.use(function (req, res, next) {
+
+    // Website you wish to allow to connect
+    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8000');
+
+    // Request methods you wish to allow
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
+
+    // Request headers you wish to allow
+    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
+
+    // Set to true if you need the website to include cookies in the requests sent
+    // to the API (e.g. in case you use sessions)
+    res.setHeader('Access-Control-Allow-Credentials', true);
+
+    // Pass to next layer of middleware
+    next();
+});
 
 mongoose.Promise = Promise; // Просим Mongoose использовать стандартные Промисы
 mongoose.set('debug', true);  // Просим Mongoose писать все запросы к базе в консоль. Удобно для отладки кода
@@ -44,6 +73,8 @@ const userSchema = new mongoose.Schema({
   },
   passwordHash: String,
   salt: String,
+  lists: String,
+  listsDate: String,
 }, {
   timestamps: true
 });
@@ -170,14 +201,85 @@ router.get('/custom', async(ctx, next) => {
 //---Socket Communication-----//
 let io = socketIO(server);
 
+io.on('connection', function (socket) {
+  // Save List To DB
+  socket.on('sendList', function (data) {
+    if (typeof socket.decoded_token !== 'undefined') {
+      let useremail = socket.decoded_token.email;
+      console.log('email: ' + useremail);
+      
+      User.update({ email: useremail }, { lists: data }, function (err, raw) {
+        if (err) console.log(err);
+        console.log('The raw response from Mongo was ', raw);
+        socket.broadcast.emit('updated_list',  data);
+      });
+    }
+  });
+  socket.on("login", function (data) {
+    console.log('LOGIN');
+    console.log(data);
+    var user = JSON.parse(data);
+    test_login(user.username, user.password, socket);
+  });
+  socket.on("register", function (data) {
+    console.log('REGISTRATION');
+    console.log(data);
+    data = JSON.parse(data);
+    User.create(data, (err, user) => {
+    if (err) {
+      socket.emit('registration_error', 'Пользователь с такой почтой уже зарегистрирован.');
+    }else{
+      socket.emit('registration_result', user);
+    }
+  });
+
+  });
+});
+
 io.on('connection', socketioJwt.authorize({
   secret: jwtsecret,
   timeout: 15000
-})).on('authenticated', function (socket) {
-  
+}))
+.on('authenticated', function (socket) {
+  Object.keys(io.sockets.sockets).forEach(function(id) {
+      console.log("ID:",id)  // socketId
+  });
   console.log('Это мое имя из токена: ' + socket.decoded_token.displayName);
-  
-  socket.on("clientEvent", (data) => {
-    console.log(data);
-  })
+  let email = socket.decoded_token.email;
+  User.findOne({email}, (err, user) => {
+    if (err) {
+      console.log(err);
+      return (err);
+    }
+    socket.emit('authenticate_result',  user);
+  });
 });
+
+function test_login(email, password, socket) {
+    User.findOne({email}, (err, user) => {
+      if (err) {
+        console.log(err);
+        return (err);
+      }
+      console.log(user);
+      if (!user || !user.checkPassword(password)) {
+        var error = 'К сожалению мы не нашли пользователя с такой почтой и паролем.<br/> Попробуйте еще раз или воспользуйтесь восстановлением пароля.';
+        socket.emit('login_result', error);
+        console.log(error);
+      }else{
+        //--payload - информация которую мы храним в токене и можем из него получать
+        const payload = {
+          id: user.id,
+          displayName: user.displayName,
+          email: user.email
+        };
+        const token = jwt.sign(payload, jwtsecret); //здесь создается JWT
+        
+        var body = {user: user.displayName, token: token};
+        // отправляем ответ клиенту
+        socket.emit('auth_accept', body);
+        console.log(body);
+      }
+      
+    });
+  }
